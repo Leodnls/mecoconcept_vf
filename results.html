@@ -1,0 +1,319 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0">
+  <title>Bilan Carbone – Résultats détaillés</title>
+  <link rel="stylesheet" href="style.css">
+  <!-- Chart.js CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels"></script>
+  <!-- html2canvas + jsPDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Résultats détaillés du bilan carbone</h1>
+  </header>
+  <main id="container"></main>
+
+  <script>
+    // Récupération des données
+    const r = JSON.parse(localStorage.getItem('bilan'));
+    const f = (v,n=3)=>Number(v.toFixed(n));
+
+    let html = '';
+
+    // 1. Dimensions & densité
+    html += `<section>
+      <h2>1. Dimensions et densité</h2>
+      <p><strong>Volume</strong> = ${r.L} m × ${r.l} m × ${r.h} m  
+         = <em>${f(r.vol,6)} m³</em></p>
+      <p><strong>Masse</strong> = ${f(r.vol,6)} m³ × ${r.rho_brique} kg/m³  
+         = <em>${f(r.masse)} kg</em></p>
+    </section>`;
+   
+
+    // 2. Terre nécessaire
+    html += `<section>
+      <h2>2. Terre nécessaire (${r.refus_pct}% refus)</h2>
+      <p><strong>Masse brute</strong> = ${f(r.masse)} kg ÷ (1 – ${r.refus_pct}/100)  
+         = <em>${f(r.mTerre)} kg</em></p>
+      <p><strong>Volume extrait</strong> = ${f(r.mTerre)} kg ÷ ${r.rho_terre} kg/m³  
+         = <em>${f(r.vTerre)} m³</em></p>
+    </section>`;
+
+    // 3. Ajout d’eau
+    html += `<section>
+      <h2>3. Ajout d’eau (${r.pct_eau}% de la masse)</h2>
+      <p><strong>Masse eau</strong> = ${f(r.masse)} kg × ${r.pct_eau}/100  
+         = <em>${f(r.mEau)} kg</em> (0 kg CO₂)</p>
+    </section>`;
+
+    // 4. Distances chantier
+    html += `<section>
+      <h2>4. Distances chantier</h2>
+      <p><strong>AR extraction→usine</strong> = <em>${r.d_terre} km</em></p>
+      <p><strong>AR usine→site</strong>     = <em>${r.d_briques} km</em></p>
+    </section>`;
+
+    // 5. Déplacements ouvriers
+    html += `<section>
+      <h2>5. Déplacements des ouvriers</h2>
+      <p>Distance totale = ${r.jours} × ${r.d_terre} km = <em>${f(r.jours * r.d_terre)} km</em></p>
+      <p>Carburant consommé = (${r.cons_ouv} L/100 km × ${f(r.jours * r.d_terre)} km) ÷ 100  
+         = <em>${f((r.cons_ouv * r.jours * r.d_terre) / 100,2)} L</em></p>
+      <p>
+        Émissions = Carburant (L) × Facteur diesel (2,68 kg CO₂/L) (source ADEME)<br>
+        = ${f((r.cons_ouv * r.jours * r.d_terre) / 100,2)} L × 2,68 kg CO₂/L  
+        = <em>${f(r.eO)} kg CO₂</em>
+      </p>
+    </section>`;
+
+    // 6. Motoculteur thermique
+    html += `<section>
+      <h2>6. Motoculteur thermique</h2>
+      <p>Carburant = ${r.cons_moto} L/h × ${r.h_moto} h = <em>${f(r.cons_moto * r.h_moto)} L</em></p>
+      <p>
+        Émissions = Carburant (L) × Facteur essence (2,31 kg CO₂/L) (source ADEME)<br>
+        = ${f(r.cons_moto * r.h_moto)} L × 2,31 kg CO₂/L  
+        = <em>${f(r.eM)} kg CO₂</em>
+      </p>
+    </section>`;
+
+    // 7. Transport de la terre
+    html += `<section>
+      <h2>7. Transport de la terre</h2>
+      <p>
+        Carburant/tour = (${r.cons_t_terre} L/100 km × ${r.d_terre} km) ÷ 100  
+        = <em>${f((r.cons_t_terre * r.d_terre) / 100,2)} L</em>
+      </p>
+      <p>
+        Émissions/tour = Carburant (L) × Facteur diesel (2,68 kg CO₂/L) (source ADEME)<br>
+        = ${f((r.cons_t_terre * r.d_terre) / 100,2)} L × 2,68 kg CO₂/L  
+        = <em>${f(((r.cons_t_terre * r.d_terre) / 100) * 2.68)} kg CO₂</em>
+      </p>
+      <p>
+        Pour ${r.tours_terre} tours :  
+        = ${r.tours_terre} × ${f(((r.cons_t_terre * r.d_terre) / 100) * 2.68)} kg CO₂  
+        = <em>${f(r.eTT)} kg CO₂</em>
+      </p>
+    </section>`;
+
+    // 8. Transport des briques
+    //html += `<section>
+      //<h2>8. Transport des briques</h2>
+      //<p>
+       // Même formule que pour la terre, sur ${r.tours_briques} tours :  
+        //= <em>${f(r.eTB)} kg CO₂</em> (facteur diesel 2,68 kg CO₂/L) (source ADEME)
+      //</p>
+    //</section>`;
+
+    // 9. Rapatriement matériel
+    html += `<section>
+      <h2>8. Rapatriement du matériel</h2>
+      <p>
+        Carburant/tour = (${r.cons_rapat} L/100 km × ${r.d_terre} km) ÷ 100  
+        = <em>${f((r.cons_rapat * r.d_terre) / 100,2)} L</em><br>
+        Émissions/tour = Carburant × Facteur diesel (2,68 kg CO₂/L) (source ADEME)<br>
+        = ${f((r.cons_rapat * r.d_terre*2) / 100,2)} L × 2,68 kg CO₂/L  
+        = <em>${f(((r.cons_rapat * r.d_terre) / 100) * 2.68)} kg CO₂</em>
+      </p>
+      <p>
+        Pour ${r.tours_rapat} tours :  
+        = <em>${f(r.eR)} kg CO₂</em>
+      </p>
+    </section>`;
+
+    // 10. Transport palettes
+    html += `<section>
+      <h2>9. Transport des palettes</h2>
+      <p>
+        Carburant = (${r.cons_pal} L/100 km × ${r.d_briques} km) ÷ 100  
+        = <em>${f((r.cons_pal * r.d_briques) / 100,2)} L</em><br>
+        Émissions = Carburant × Facteur diesel (2,68 kg CO₂/L) (source ADEME)<br>
+        = <em>${f(r.eP)} kg CO₂</em>
+      </p>
+    </section>`;
+
+    // 11. Énergie découpe
+    html += `<section>
+      <h2>10. Énergie électrique pour découpe</h2>
+      <p>
+        Énergie = ${r.p_disc} W × ${r.h_disc} h  
+        = <em>${f((r.p_disc * r.h_disc) / 1000,3)} kWh</em>
+      </p>
+      <p>
+        Émissions = Énergie × Facteur électricité (0,060 kg CO₂/kWh) (source ADEME)<br>
+        = <em>${f(r.eDisc)} kg CO₂</em>
+      </p>
+    </section>`;
+
+    // 12. Machines de production
+    html += `<section>
+      <h2>11. Machines de production</h2>
+      <p><strong>Multimeco</strong> : ${r.pow_multimeco} kW × ${r.h_multimeco} h × Facteur électricité (0,060 kg CO₂/kWh)  
+         = <em>${f(r.eMM)} kg CO₂</em></p>
+      <p><strong>MecoTri</strong> : ${r.pow_mecotri} kW × ${r.h_mecotri} h × Facteur électricité (0,060 kg CO₂/kWh)  
+         = <em>${f(r.eMT)} kg CO₂</em></p>
+      <p><strong>Malaxeur</strong> : ${r.pow_malaxeur} kW × ${r.h_malaxeur} h × Facteur électricité (0,060 kg CO₂/kWh)  
+         = <em>${f(r.eMX)} kg CO₂</em></p>
+      <p><strong>Total machines</strong> = <em>${f(r.eMach)} kg CO₂</em></p>
+    </section>`;
+
+    // 13. Synthèse sous forme de tableau + camembert + bouton PDF
+    html += `<section>
+      <h2>12. Synthèse des émissions</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>Poste</th>
+            <th>Émissions (kg CO₂)</th>
+            <th>Pourcentage</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Déplacements ouvriers</td>
+            <td>${f(r.eO)}</td>
+            <td>${((r.eO/r.total)*100).toFixed(1)}%</td>
+          </tr>
+          <tr>
+            <td>Motoculteur</td>
+            <td>${f(r.eM)}</td>
+            <td>${((r.eM/r.total)*100).toFixed(1)}%</td>
+          </tr>
+          <tr>
+            <td>Transport terre</td>
+            <td>${f(r.eTT)}</td>
+            <td>${((r.eTT/r.total)*100).toFixed(1)}%</td>
+          </tr>
+        
+            <td>Rapatriement matériel</td>
+            <td>${f(r.eR)}</td>
+            <td>${((r.eR/r.total)*100).toFixed(1)}%</td>
+          </tr>
+          <tr>
+            <td>Transport palettes</td>
+            <td>${f(r.eP)}</td>
+            <td>${((r.eP/r.total)*100).toFixed(1)}%</td>
+          </tr>
+          <tr>
+            <td>Découpe disqueuse</td>
+            <td>${f(r.eDisc)}</td>
+            <td>${((r.eDisc/r.total)*100).toFixed(1)}%</td>
+          </tr>
+          <tr>
+            <td>Machines production</td>
+            <td>${f(r.eMach)}</td>
+            <td>${((r.eMach/r.total)*100).toFixed(1)}%</td>
+          </tr>
+          <tr>
+            <th>Total projet</th>
+            <th>${f(r.total)}</th>
+            <th>100%</th>
+          </tr>
+          <tr>
+            <th>Par mètre carré (${r.N})</th>
+            <th>${f(r.perBrick,4)}</th>
+            <th>&nbsp;</th>
+          </tr>
+
+          <tr>
+  <td>Comparaison avec 1 mètre carré de brique en terre cuite</td>
+  <td>52,9 </td>
+  <td></td>
+</tr>
+ <tr>
+  <td>Comparaison avec 1 mètre carré de béton</td>
+  <td>13,1 </td>
+  <td></td>
+</tr>
+        </tbody>
+      </table>
+      <canvas id="emissionsChart" width="400" height="400" style="max-width:600px;margin-top:20px;"></canvas>
+      <button id="btnDownloadPdf" style="margin-top:20px;">Télécharger en PDF</button>
+    </section>`;
+
+    html += `<button onclick="history.back()">Modifier les paramètres</button>`;
+    document.getElementById('container').innerHTML = html;
+
+    // Création du graphique en secteurs
+    const ctx = document.getElementById('emissionsChart').getContext('2d');
+    new Chart(ctx, {
+      type: 'pie',
+      data: {
+        labels: [
+          'Déplacements ouvriers',
+          'Motoculteur',
+          'Transport terre',
+          
+          'Rapatriement matériel',
+          'Transport palettes',
+          'Découpe disqueuse',
+          'Machines production'
+        ],
+        datasets: [{
+          data: [
+            f(r.eO),
+            f(r.eM),
+            f(r.eTT),
+            
+            f(r.eR),
+            f(r.eP),
+            f(r.eDisc),
+            f(r.eMach)
+          ],
+          backgroundColor: [
+            '#ff6384','#36a2eb','#cc65fe','#ffce56','#4bc0c0','#9966ff','#ff9f40','#ff6384'
+          ]
+        }]
+      },
+      options: {
+        responsive: true,
+        plugins: {
+          legend: { position: 'right' },
+          tooltip: {
+            callbacks: {
+              label: ctx => {
+                const label = ctx.label || '';
+                const value = ctx.parsed;
+                const total = ctx.dataset.data.reduce((a,b)=>a+b,0);
+                const pct = ((value/total)*100).toFixed(1);
+                return `${label} : ${value} kg CO₂ (${pct}%)`;
+              }
+            }
+          },
+          datalabels: {
+            formatter: (value, ctx) => {
+              const total = ctx.chart.data.datasets[0].data.reduce((a,b)=>a+b,0);
+              const pct = (value/total)*100;
+              return pct >= 10 ? `${pct.toFixed(1)}%` : '';
+            },
+            color: '#fff',
+            font: { weight: 'bold' }
+          }
+        }
+      },
+      plugins: [ChartDataLabels]
+    });
+
+    // PDF download
+    document.getElementById('btnDownloadPdf').addEventListener('click', () => {
+      const container = document.getElementById('container');
+      html2canvas(container, { scale: 2 }).then(canvas => {
+        const imgData = canvas.toDataURL('image/png');
+        const { jsPDF } = window.jspdf;
+        const pdf = new jsPDF({
+          orientation: 'portrait',
+          unit: 'px',
+          format: [canvas.width, canvas.height]
+        });
+        pdf.addImage(imgData, 'PNG', 0, 0, canvas.width, canvas.height);
+        pdf.save('bilan-carbone.pdf');
+      });
+    });
+  </script>
+</body>
+</html>
